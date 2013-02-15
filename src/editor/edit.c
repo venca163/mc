@@ -150,12 +150,11 @@ static off_t last_bracket = -1;
 static gboolean
 edit_load_file_fast (WEdit * edit, const vfs_path_t * filename_vpath)
 {
-    off_t buf, buf2;
-    int file = -1;
-    gboolean ret = FALSE;
+    int file;
+    gboolean ret;
 
     file = mc_open (filename_vpath, O_RDONLY | O_BINARY);
-    if (file == -1)
+    if (file < 0)
     {
         gchar *errmsg, *filename;
 
@@ -167,32 +166,10 @@ edit_load_file_fast (WEdit * edit, const vfs_path_t * filename_vpath)
         return FALSE;
     }
 
-    edit->buffer.curs2 = edit->last_byte;
-    buf2 = edit->buffer.curs2 >> S_EDIT_BUF_SIZE;
-
-    if (edit->buffer.buffers2[buf2] == NULL)
-        edit->buffer.buffers2[buf2] = g_malloc0 (EDIT_BUF_SIZE);
-
-    if (mc_read (file,
-                 (char *) edit->buffer.buffers2[buf2] + EDIT_BUF_SIZE -
-                 (edit->buffer.curs2 & M_EDIT_BUF_SIZE), edit->buffer.curs2 & M_EDIT_BUF_SIZE) < 0)
-        goto done;
-
-    for (buf = buf2 - 1; buf >= 0; buf--)
-    {
-        /* edit->buffer.buffers2[0] is already allocated */
-        if (edit->buffer.buffers2[buf] == NULL)
-            edit->buffer.buffers2[buf] = g_malloc0 (EDIT_BUF_SIZE);
-        if (mc_read (file, (char *) edit->buffer.buffers2[buf], EDIT_BUF_SIZE) < 0)
-            goto done;
-    }
-
-    edit->total_lines = edit_count_lines (edit, 0, edit->last_byte);
-
-    ret = TRUE;
-
-  done:
-    if (!ret)
+    ret = edit_buffer_read_file (&edit->buffer, file, edit->last_byte);
+    if (ret)
+        edit->total_lines = edit_count_lines (edit, 0, edit->last_byte);
+    else
     {
         gchar *errmsg, *filename;
 
@@ -202,6 +179,7 @@ edit_load_file_fast (WEdit * edit, const vfs_path_t * filename_vpath)
         edit_error_dialog (_("Error"), errmsg);
         g_free (errmsg);
     }
+
     mc_close (file);
     return ret;
 }

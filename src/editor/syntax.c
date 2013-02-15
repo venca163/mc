@@ -2,12 +2,13 @@
    Editor syntax highlighting.
 
    Copyright (C) 1996, 1997, 1998, 2001, 2002, 2003, 2004, 2005, 2006,
-   2007, 2010, 2011
+   2007, 2010, 2011, 2013
    The Free Software Foundation, Inc.
 
    Written by:
    Paul Sheer, 1998
    Egmont Koblinger <egmont@gmail.com>, 2010
+   Andrew Borodin <aborodin@vmail.ru>, 2013
 
    This file is part of the Midnight Commander.
 
@@ -224,7 +225,7 @@ compare_word_to_right (const WEdit * edit, off_t i, const char *text,
     if (*text == '\0')
         return -1;
 
-    c = xx_tolower (edit, edit_get_byte (edit, i - 1));
+    c = xx_tolower (edit, edit_buffer_get_byte (&edit->buffer, i - 1));
     if ((line_start != 0 && c != '\n') || (whole_left != NULL && strchr (whole_left, c) != NULL))
         return -1;
 
@@ -237,7 +238,7 @@ compare_word_to_right (const WEdit * edit, off_t i, const char *text,
                 return -1;
             while (TRUE)
             {
-                c = xx_tolower (edit, edit_get_byte (edit, i));
+                c = xx_tolower (edit, edit_buffer_get_byte (&edit->buffer, i));
                 if (*p == '\0' && whole_right != NULL && strchr (whole_right, c) == NULL)
                     break;
                 if (c == *p)
@@ -253,7 +254,7 @@ compare_word_to_right (const WEdit * edit, off_t i, const char *text,
             j = 0;
             while (TRUE)
             {
-                c = xx_tolower (edit, edit_get_byte (edit, i));
+                c = xx_tolower (edit, edit_buffer_get_byte (&edit->buffer, i));
                 if (c == *p)
                 {
                     j = i;
@@ -285,7 +286,7 @@ compare_word_to_right (const WEdit * edit, off_t i, const char *text,
             while (TRUE)
             {
                 d = c;
-                c = xx_tolower (edit, edit_get_byte (edit, i));
+                c = xx_tolower (edit, edit_buffer_get_byte (&edit->buffer, i));
                 for (j = 0; p[j] != SYNTAX_TOKEN_BRACKET && p[j]; j++)
                     if (c == p[j])
                         goto found_char2;
@@ -304,7 +305,7 @@ compare_word_to_right (const WEdit * edit, off_t i, const char *text,
         case SYNTAX_TOKEN_BRACE:
             if (++p > q)
                 return -1;
-            c = xx_tolower (edit, edit_get_byte (edit, i));
+            c = xx_tolower (edit, edit_buffer_get_byte (&edit->buffer, i));
             for (; *p != SYNTAX_TOKEN_BRACE && *p; p++)
                 if (c == *p)
                     goto found_char3;
@@ -314,12 +315,12 @@ compare_word_to_right (const WEdit * edit, off_t i, const char *text,
                 p++;
             break;
         default:
-            if (*p != xx_tolower (edit, edit_get_byte (edit, i)))
+            if (*p != xx_tolower (edit, edit_buffer_get_byte (&edit->buffer, i)))
                 return -1;
         }
     }
     return (whole_right != NULL &&
-            strchr (whole_right, xx_tolower (edit, edit_get_byte (edit, i))) != NULL) ? -1 : i;
+            strchr (whole_right, xx_tolower (edit, edit_buffer_get_byte (&edit->buffer, i))) != NULL) ? -1 : i;
 }
 
 /* --------------------------------------------------------------------------------------------- */
@@ -347,7 +348,7 @@ apply_rules_going_right (WEdit * edit, off_t i, edit_syntax_rule_t rule)
     off_t end = 0;
     edit_syntax_rule_t _rule = rule;
 
-    c = xx_tolower (edit, edit_get_byte (edit, i));
+    c = xx_tolower (edit, edit_buffer_get_byte (&edit->buffer, i));
     if (c == 0)
         return rule;
     is_end = (rule.end == i);
@@ -355,7 +356,7 @@ apply_rules_going_right (WEdit * edit, off_t i, edit_syntax_rule_t rule)
     /* check to turn off a keyword */
     if (_rule.keyword)
     {
-        if (edit_get_byte (edit, i - 1) == '\n')
+        if (edit_buffer_get_byte (&edit->buffer, i - 1) == '\n')
             _rule.keyword = 0;
         if (is_end)
         {
@@ -1377,7 +1378,7 @@ get_first_editor_line (WEdit * edit)
 
         for (i = 0; i < sizeof (s) - 1; i++)
         {
-            s[i] = edit_get_byte (edit, i);
+            s[i] = edit_buffer_get_byte (&edit->buffer, i);
             if (s[i] == '\n')
             {
                 s[i] = '\0';

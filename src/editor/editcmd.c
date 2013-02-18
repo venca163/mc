@@ -3362,7 +3362,7 @@ edit_complete_word_cmd (WEdit * edit)
 {
     gsize i, max_len, word_len = 0, num_compl = 0;
     off_t word_start = 0;
-    unsigned char *bufpos;
+    GString *buf;
     char *match_expr;
     struct selection compl[MAX_WORD_COMPLETIONS];       /* completions */
 
@@ -3371,13 +3371,16 @@ edit_complete_word_cmd (WEdit * edit)
         return;
 
     /* prepare match expression */
-    bufpos = &edit->buffer.buffers1[word_start >> S_EDIT_BUF_SIZE][word_start & M_EDIT_BUF_SIZE];
+    buf = g_string_sized_new (word_len);
+    for (i = 0; i < word_len; i++)
+        g_string_append_c (buf, edit_buffer_get_byte (&edit->buffer, word_start + i));
 
-    /* match_expr = g_strdup_printf ("\\b%.*s[a-zA-Z_0-9]+", word_len, bufpos); */
+    /* match_expr = g_strdup_printf ("\\b%.*s[a-zA-Z_0-9]+", word_len, buf->str); */
     match_expr =
         g_strdup_printf
         ("(^|\\s+|\\b)%.*s[^\\s\\.=\\+\\[\\]\\(\\)\\,\\;\\:\\\"\\'\\-\\?\\/\\|\\\\\\{\\}\\*\\&\\^\\%%\\$#@\\!]+",
-         (int) word_len, bufpos);
+         (int) word_len, buf->str);
+    g_string_free (buf, TRUE);
 
     /* collect the possible completions              */
     /* start search from begin to end of file */
@@ -3526,11 +3529,10 @@ edit_load_back_cmd (WEdit * edit)
 void
 edit_get_match_keyword_cmd (WEdit * edit)
 {
-    gsize word_len = 0, max_len = 0;
+    gsize i, word_len = 0, max_len = 0;
     int num_def = 0;
-    int i;
     off_t word_start = 0;
-    unsigned char *bufpos;
+    GString *buf;
     char *match_expr;
     char *path = NULL;
     char *ptr = NULL;
@@ -3539,17 +3541,19 @@ edit_get_match_keyword_cmd (WEdit * edit)
     etags_hash_t def_hash[MAX_DEFINITIONS];
 
     for (i = 0; i < MAX_DEFINITIONS; i++)
-    {
         def_hash[i].filename = NULL;
-    }
 
     /* search start of word to be completed */
     if (!edit_find_word_start (edit, &word_start, &word_len))
         return;
 
     /* prepare match expression */
-    bufpos = &edit->buffer.buffers1[word_start >> S_EDIT_BUF_SIZE][word_start & M_EDIT_BUF_SIZE];
-    match_expr = g_strdup_printf ("%.*s", (int) word_len, bufpos);
+    buf = g_string_sized_new (word_len);
+    for (i = 0; i < word_len; i++)
+        g_string_append_c (buf, edit_buffer_get_byte (&edit->buffer, word_start + i));
+
+    match_expr = g_strdup_printf ("%.*s", (int) word_len, buf->str);
+    g_string_free (buf, TRUE);
 
     ptr = g_get_current_dir ();
     path = g_strconcat (ptr, G_DIR_SEPARATOR_S, (char *) NULL);

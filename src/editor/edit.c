@@ -316,14 +316,10 @@ check_file_access (WEdit * edit, const vfs_path_t * filename_vpath, struct stat 
     if (st->st_size > 0)
         edit->delete_file = 0;
 
-    if (st->st_size >= SIZE_LIMIT)
-    {
-        char *filename;
-
-        filename = vfs_path_to_str (filename_vpath);
-        errmsg = g_strdup_printf (_("File \"%s\" is too large"), filename);
-        g_free (filename);
-    }
+    /* TODO:
+     *  Add ini option of file size alarm threshold.
+     *  Add here the query dialog "The file is too large. Open it anyway?".
+     */
 
   cleanup:
     (void) mc_close (file);
@@ -2400,10 +2396,6 @@ edit_push_redo_action (WEdit * edit, long c)
 void
 edit_insert (WEdit * edit, int c)
 {
-    /* check if file has grown to large */
-    if (edit->last_byte >= SIZE_LIMIT)
-        return;
-
     /* first we must update the position of the display window */
     if (edit->buffer.curs1 < edit->start_display)
     {
@@ -2448,9 +2440,6 @@ edit_insert (WEdit * edit, int c)
 void
 edit_insert_ahead (WEdit * edit, int c)
 {
-    if (edit->last_byte >= SIZE_LIMIT)
-        return;
-
     if (edit->buffer.curs1 < edit->start_display)
     {
         edit->start_display++;

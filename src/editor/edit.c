@@ -166,9 +166,9 @@ edit_load_file_fast (WEdit * edit, const vfs_path_t * filename_vpath)
         return FALSE;
     }
 
-    ret = (edit_buffer_read_file (&edit->buffer, file, edit->last_byte) == edit->last_byte);
+    ret = (edit_buffer_read_file (&edit->buffer, file, edit->buffer.size) == edit->buffer.size);
     if (ret)
-        edit->total_lines = edit_count_lines (edit, 0, edit->last_byte);
+        edit->buffer.lines = edit_buffer_count_lines (&edit->buffer, 0, edit->buffer.size);
     else
     {
         gchar *errmsg, *filename;
@@ -386,11 +386,10 @@ edit_load_file (WEdit * edit)
         fast_load = FALSE;
     }
 
-    edit_buffer_init (&edit->buffer);
-
     if (fast_load)
     {
-        edit->last_byte = edit->stat1.st_size;
+        edit_buffer_init (&edit->buffer, edit->stat1.st_size);
+
         if (!edit_load_file_fast (edit, edit->filename_vpath))
         {
             edit_clean (edit);
@@ -399,7 +398,8 @@ edit_load_file (WEdit * edit)
     }
     else
     {
-        edit->last_byte = 0;
+        edit_buffer_init (&edit->buffer, 0);
+
         if (edit->filename_vpath != NULL
             && *(vfs_path_get_by_index (edit->filename_vpath, 0)->path) != '\0')
         {
@@ -439,7 +439,7 @@ edit_load_position (WEdit * edit)
     else if (offset > 0)
     {
         edit_cursor_move (edit, offset);
-        line = edit->curs_line;
+        line = edit->buffer.curs_line;
         edit->search_start = edit->buffer.curs1;
     }
 
@@ -460,7 +460,7 @@ edit_save_position (WEdit * edit)
         return;
 
     book_mark_serialize (edit, BOOK_MARK_COLOR);
-    save_file_position (edit->filename_vpath, edit->curs_line + 1, edit->curs_col, edit->buffer.curs1,
+    save_file_position (edit->filename_vpath, edit->buffer.curs_line + 1, edit->curs_col, edit->buffer.curs1,
                         edit->serialized_bookmarks);
     edit->serialized_bookmarks = NULL;
 }
@@ -642,13 +642,13 @@ edit_find_line (WEdit * edit, long line)
         memset (edit->line_numbers, 0, sizeof (edit->line_numbers));
         memset (edit->line_offsets, 0, sizeof (edit->line_offsets));
         /* three offsets that we *know* are line 0 at 0 and these two: */
-        edit->line_numbers[1] = edit->curs_line;
+        edit->line_numbers[1] = edit->buffer.curs_line;
         edit->line_offsets[1] = edit_bol (edit, edit->buffer.curs1);
-        edit->line_numbers[2] = edit->total_lines;
-        edit->line_offsets[2] = edit_bol (edit, edit->last_byte);
+        edit->line_numbers[2] = edit->buffer.lines;
+        edit->line_offsets[2] = edit_bol (edit, edit->buffer.size);
         edit->caches_valid = TRUE;
     }
-    if (line >= edit->total_lines)
+    if (line >= edit->buffer.lines)
         return edit->line_offsets[2];
     if (line <= 0)
         return 0;
@@ -689,17 +689,17 @@ edit_move_up_paragraph (WEdit * edit, gboolean do_scroll)
 {
     long i = 0;
 
-    if (edit->curs_line > 1)
+    if (edit->buffer.curs_line > 1)
     {
-        if (!edit_line_is_blank (edit, edit->curs_line))
+        if (!edit_line_is_blank (edit, edit->buffer.curs_line))
         {
-            for (i = edit->curs_line - 1; i != 0; i--)
+            for (i = edit->buffer.curs_line - 1; i != 0; i--)
                 if (edit_line_is_blank (edit, i))
                     break;
         }
-        else if (edit_line_is_blank (edit, edit->curs_line - 1))
+        else if (edit_line_is_blank (edit, edit->buffer.curs_line - 1))
         {
-            for (i = edit->curs_line - 1; i != 0; i--)
+            for (i = edit->buffer.curs_line - 1; i != 0; i--)
                 if (!edit_line_is_blank (edit, i))
                 {
                     i++;
@@ -708,13 +708,13 @@ edit_move_up_paragraph (WEdit * edit, gboolean do_scroll)
         }
         else
         {
-            for (i = edit->curs_line - 1; i != 0; i--)
+            for (i = edit->buffer.curs_line - 1; i != 0; i--)
                 if (edit_line_is_blank (edit, i))
                     break;
         }
     }
 
-    edit_move_up (edit, edit->curs_line - i, do_scroll);
+    edit_move_up (edit, edit->buffer.curs_line - i, do_scroll);
 }
 
 /* --------------------------------------------------------------------------------------------- */
@@ -726,18 +726,18 @@ edit_move_down_paragraph (WEdit * edit, gboolean do_scroll)
 {
     long i;
 
-    if (edit->curs_line >= edit->total_lines - 1)
-        i = edit->total_lines;
-    else if (!edit_line_is_blank (edit, edit->curs_line))
+    if (edit->buffer.curs_line >= edit->buffer.lines - 1)
+        i = edit->buffer.lines;
+    else if (!edit_line_is_blank (edit, edit->buffer.curs_line))
     {
-        for (i = edit->curs_line + 1; i != 0; i++)
-            if (edit_line_is_blank (edit, i) || i >= edit->total_lines)
+        for (i = edit->buffer.curs_line + 1; i != 0; i++)
+            if (edit_line_is_blank (edit, i) || i >= edit->buffer.lines)
                 break;
     }
-    else if (edit_line_is_blank (edit, edit->curs_line + 1))
+    else if (edit_line_is_blank (edit, edit->buffer.curs_line + 1))
     {
-        for (i = edit->curs_line + 1; i != 0; i++)
-            if (!edit_line_is_blank (edit, i) || i > edit->total_lines)
+        for (i = edit->buffer.curs_line + 1; i != 0; i++)
+            if (!edit_line_is_blank (edit, i) || i > edit->buffer.lines)
             {
                 i--;
                 break;
@@ -745,11 +745,11 @@ edit_move_down_paragraph (WEdit * edit, gboolean do_scroll)
     }
     else
     {
-        for (i = edit->curs_line + 1; i != 0; i++)
-            if (edit_line_is_blank (edit, i) || i >= edit->total_lines)
+        for (i = edit->buffer.curs_line + 1; i != 0; i++)
+            if (edit_line_is_blank (edit, i) || i >= edit->buffer.lines)
                 break;
     }
-    edit_move_down (edit, i - edit->curs_line, do_scroll);
+    edit_move_down (edit, i - edit->buffer.curs_line, do_scroll);
 }
 
 /* --------------------------------------------------------------------------------------------- */
@@ -777,7 +777,7 @@ edit_end_page (WEdit * edit)
 static void
 edit_move_to_top (WEdit * edit)
 {
-    if (edit->curs_line)
+    if (edit->buffer.curs_line != 0)
     {
         edit_cursor_move (edit, -edit->buffer.curs1);
         edit_move_to_prev_col (edit, 0);
@@ -787,18 +787,17 @@ edit_move_to_top (WEdit * edit)
     }
 }
 
-
 /* --------------------------------------------------------------------------------------------- */
 /** goto end of text */
 
 static void
 edit_move_to_bottom (WEdit * edit)
 {
-    if (edit->curs_line < edit->total_lines)
+    if (edit->buffer.curs_line < edit->buffer.lines)
     {
-        edit_move_down (edit, edit->total_lines - edit->curs_row, 0);
-        edit->start_display = edit->last_byte;
-        edit->start_line = edit->total_lines;
+        edit_move_down (edit, edit->buffer.lines - edit->curs_row, 0);
+        edit->start_display = edit->buffer.size;
+        edit->start_line = edit->buffer.lines;
         edit_scroll_upward (edit, WIDGET (edit)->lines - 1);
         edit->force |= REDRAW_PAGE;
     }
@@ -922,7 +921,7 @@ edit_right_word_move (WEdit * edit, int s)
             && edit->over_col == 0 && edit->buffer.curs1 == edit_eol (edit, edit->buffer.curs1))
             break;
         edit_cursor_move (edit, 1);
-        if (edit->buffer.curs1 >= edit->last_byte)
+        if (edit->buffer.curs1 >= edit->buffer.size)
             break;
         c1 = edit_buffer_get_previous_byte (&edit->buffer);
         c2 = edit_buffer_get_current_byte (&edit->buffer);
@@ -1011,7 +1010,7 @@ static void
 edit_move_updown (WEdit * edit, long lines, gboolean do_scroll, gboolean direction)
 {
     long p;
-    long l = direction ? edit->curs_line : edit->total_lines - edit->curs_line;
+    long l = direction ? edit->buffer.curs_line : edit->buffer.lines - edit->buffer.curs_line;
 
     if (lines > l)
         lines = l;
@@ -1038,7 +1037,7 @@ edit_move_updown (WEdit * edit, long lines, gboolean do_scroll, gboolean directi
 
 #ifdef HAVE_CHARSET
     /* search start of current multibyte char (like CJK) */
-    if (edit->buffer.curs1 > 0 && edit->buffer.curs1 + 1 < edit->last_byte
+    if (edit->buffer.curs1 > 0 && edit->buffer.curs1 + 1 < edit->buffer.size
         && edit_buffer_get_current_byte (&edit->buffer) >= 256)
     {
         edit_right_char_move_cmd (edit);
@@ -1055,7 +1054,7 @@ edit_move_updown (WEdit * edit, long lines, gboolean do_scroll, gboolean directi
 static void
 edit_right_delete_word (WEdit * edit)
 {
-    while (edit->buffer.curs1 < edit->last_byte)
+    while (edit->buffer.curs1 < edit->buffer.size)
     {
         int c1, c2;
 
@@ -1158,12 +1157,12 @@ edit_do_undo (WEdit * edit)
 
     if (edit->start_display > ac - KEY_PRESS)
     {
-        edit->start_line -= edit_count_lines (edit, ac - KEY_PRESS, edit->start_display);
+        edit->start_line -= edit_buffer_count_lines (&edit->buffer, ac - KEY_PRESS, edit->start_display);
         edit->force |= REDRAW_PAGE;
     }
     else if (edit->start_display < ac - KEY_PRESS)
     {
-        edit->start_line += edit_count_lines (edit, edit->start_display, ac - KEY_PRESS);
+        edit->start_line += edit_buffer_count_lines (&edit->buffer, edit->start_display, ac - KEY_PRESS);
         edit->force |= REDRAW_PAGE;
     }
     edit->start_display = ac - KEY_PRESS;       /* see push and pop above */
@@ -1234,12 +1233,12 @@ edit_do_redo (WEdit * edit)
 
     if (edit->start_display > ac - KEY_PRESS)
     {
-        edit->start_line -= edit_count_lines (edit, ac - KEY_PRESS, edit->start_display);
+        edit->start_line -= edit_buffer_count_lines (&edit->buffer, ac - KEY_PRESS, edit->start_display);
         edit->force |= REDRAW_PAGE;
     }
     else if (edit->start_display < ac - KEY_PRESS)
     {
-        edit->start_line += edit_count_lines (edit, edit->start_display, ac - KEY_PRESS);
+        edit->start_line += edit_buffer_count_lines (&edit->buffer, edit->start_display, ac - KEY_PRESS);
         edit->force |= REDRAW_PAGE;
     }
     edit->start_display = ac - KEY_PRESS;       /* see push and pop above */
@@ -1477,7 +1476,7 @@ edit_get_bracket (WEdit * edit, gboolean in_screen, unsigned long furthest_brack
     for (q = edit->buffer.curs1 + inc;; q += inc)
     {
         /* out of buffer? */
-        if (q >= edit->last_byte || q < 0)
+        if (q >= edit->buffer.size || q < 0)
             break;
         a = edit_buffer_get_byte (&edit->buffer, q);
         /* don't want to eat CPU */
@@ -1536,7 +1535,7 @@ edit_move_block_to_right (WEdit * edit)
     do
     {
         edit_cursor_move (edit, cur_bol - edit->buffer.curs1);
-        if (!edit_line_is_blank (edit, edit->curs_line))
+        if (!edit_line_is_blank (edit, edit->buffer.curs_line))
         {
             if (option_fill_tabs_with_spaces)
                 insert_spaces_tab (edit, option_fake_half_tabs);
@@ -1710,14 +1709,14 @@ edit_write_stream (WEdit * edit, FILE * f)
 
     if (edit->lb == LB_ASIS)
     {
-        for (i = 0; i < edit->last_byte; i++)
+        for (i = 0; i < edit->buffer.size; i++)
             if (fputc (edit_buffer_get_byte (&edit->buffer, i), f) < 0)
                 break;
         return i;
     }
 
     /* change line breaks */
-    for (i = 0; i < edit->last_byte; i++)
+    for (i = 0; i < edit->buffer.size; i++)
     {
         unsigned char c;
 
@@ -1797,7 +1796,7 @@ edit_write_stream (WEdit * edit, FILE * f)
         }
     }
 
-    return edit->last_byte;
+    return edit->buffer.size;
 }
 
 /* --------------------------------------------------------------------------------------------- */
@@ -2453,9 +2452,9 @@ edit_insert (WEdit * edit, int c)
     /* now we must update some info on the file and check if a redraw is required */
     if (c == '\n')
     {
-        book_mark_inc (edit, edit->curs_line);
-        edit->curs_line++;
-        edit->total_lines++;
+        book_mark_inc (edit, edit->buffer.curs_line);
+        edit->buffer.curs_line++;
+        edit->buffer.lines++;
         edit->force |= REDRAW_LINE_ABOVE | REDRAW_AFTER_CURSOR;
     }
 
@@ -2473,7 +2472,7 @@ edit_insert (WEdit * edit, int c)
     edit_buffer_insert (&edit->buffer, c);
 
     /* update file length */
-    edit->last_byte++;
+    edit->buffer.size++;
 }
 
 /* --------------------------------------------------------------------------------------------- */
@@ -2494,8 +2493,8 @@ edit_insert_ahead (WEdit * edit, int c)
     edit_modification (edit);
     if (c == '\n')
     {
-        book_mark_inc (edit, edit->curs_line);
-        edit->total_lines++;
+        book_mark_inc (edit, edit->buffer.curs_line);
+        edit->buffer.lines++;
         edit->force |= REDRAW_AFTER_CURSOR;
     }
     /* ordinary char and not space */
@@ -2510,7 +2509,7 @@ edit_insert_ahead (WEdit * edit, int c)
 
     edit_buffer_insert_ahead (&edit->buffer, c);
 
-    edit->last_byte++;
+    edit->buffer.size++;
 }
 
 /* --------------------------------------------------------------------------------------------- */
@@ -2554,15 +2553,15 @@ edit_delete (WEdit * edit, gboolean byte_delete)
 
         p = edit_buffer_delete (&edit->buffer);
 
-        edit->last_byte--;
+        edit->buffer.size--;
         edit_push_undo_action (edit, p + 256);
     }
 
     edit_modification (edit);
     if (p == '\n')
     {
-        book_mark_dec (edit, edit->curs_line);
-        edit->total_lines--;
+        book_mark_dec (edit, edit->buffer.curs_line);
+        edit->buffer.lines--;
         edit->force |= REDRAW_AFTER_CURSOR;
     }
     if (edit->buffer.curs1 < edit->start_display)
@@ -2615,15 +2614,15 @@ edit_backspace (WEdit * edit, gboolean byte_delete)
 
         p = edit_buffer_backspace (&edit->buffer);
 
-        edit->last_byte--;
+        edit->buffer.size--;
         edit_push_undo_action (edit, p);
     }
     edit_modification (edit);
     if (p == '\n')
     {
-        book_mark_dec (edit, edit->curs_line);
-        edit->curs_line--;
-        edit->total_lines--;
+        book_mark_dec (edit, edit->buffer.curs_line);
+        edit->buffer.curs_line--;
+        edit->buffer.lines--;
         edit->force |= REDRAW_AFTER_CURSOR;
     }
 
@@ -2656,7 +2655,7 @@ edit_cursor_move (WEdit * edit, off_t increment)
             c = edit_buffer_backspace (&edit->buffer);
             if (c == '\n')
             {
-                edit->curs_line--;
+                edit->buffer.curs_line--;
                 edit->force |= REDRAW_LINE_BELOW;
             }
         }
@@ -2674,7 +2673,7 @@ edit_cursor_move (WEdit * edit, off_t increment)
             c = edit_buffer_delete (&edit->buffer);
             if (c == '\n')
             {
-                edit->curs_line++;
+                edit->buffer.curs_line++;
                 edit->force |= REDRAW_LINE_ABOVE;
             }
         }
@@ -2689,8 +2688,8 @@ edit_cursor_move (WEdit * edit, off_t increment)
 off_t
 edit_eol (const WEdit * edit, off_t current)
 {
-    if (current >= edit->last_byte)
-        return edit->last_byte;
+    if (current >= edit->buffer.size)
+        return edit->buffer.size;
 
     for (; edit_buffer_get_byte (&edit->buffer, current) != '\n'; current++)
         ;
@@ -2714,23 +2713,6 @@ edit_bol (const WEdit * edit, off_t current)
 }
 
 /* --------------------------------------------------------------------------------------------- */
-
-long
-edit_count_lines (const WEdit * edit, off_t current, off_t upto)
-{
-    long lines = 0;
-
-    if (upto > edit->last_byte)
-        upto = edit->last_byte;
-    if (current < 0)
-        current = 0;
-    while (current < upto)
-        if (edit_buffer_get_byte (&edit->buffer, current++) == '\n')
-            lines++;
-    return lines;
-}
-
-/* --------------------------------------------------------------------------------------------- */
 /* If lines is zero this returns the count of lines from current to upto. */
 /* If upto is zero returns index of lines forward current. */
 
@@ -2738,9 +2720,7 @@ off_t
 edit_move_forward (const WEdit * edit, off_t current, long lines, off_t upto)
 {
     if (upto != 0)
-    {
-        return (off_t) edit_count_lines (edit, current, upto);
-    }
+        return (off_t) edit_buffer_count_lines (&edit->buffer, current, upto);
     else
     {
         long next;
@@ -2749,7 +2729,7 @@ edit_move_forward (const WEdit * edit, off_t current, long lines, off_t upto)
         while (lines-- != 0)
         {
             next = edit_eol (edit, current) + 1;
-            if (next > edit->last_byte)
+            if (next > edit->buffer.size)
                 break;
             else
                 current = next;
@@ -2788,7 +2768,7 @@ edit_move_forward3 (const WEdit * edit, off_t current, long cols, off_t upto)
         cols = -10;
     }
     else
-        q = edit->last_byte + 2;
+        q = edit->buffer.size + 2;
 
     for (col = 0, p = current; p < q; p++)
     {
@@ -2859,7 +2839,7 @@ edit_get_col (const WEdit * edit)
 void
 edit_update_curs_row (WEdit * edit)
 {
-    edit->curs_row = edit->curs_line - edit->start_line;
+    edit->curs_row = edit->buffer.curs_line - edit->start_line;
 }
 
 /* --------------------------------------------------------------------------------------------- */
@@ -2906,7 +2886,7 @@ edit_scroll_downward (WEdit * edit, long i)
 {
     long lines_below;
 
-    lines_below = edit->total_lines - edit->start_line - (WIDGET (edit)->lines - 1);
+    lines_below = edit->buffer.lines - edit->start_line - (WIDGET (edit)->lines - 1);
     if (lines_below > 0)
     {
         if (i > lines_below)
@@ -3022,10 +3002,10 @@ edit_line_is_blank (WEdit * edit, long line)
 void
 edit_move_to_line (WEdit * e, long line)
 {
-    if (line < e->curs_line)
-        edit_move_up (e, e->curs_line - line, 0);
+    if (line < e->buffer.curs_line)
+        edit_move_up (e, e->buffer.curs_line - line, 0);
     else
-        edit_move_down (e, line - e->curs_line, 0);
+        edit_move_down (e, line - e->buffer.curs_line, 0);
     edit_scroll_screen_over_cursor (e);
 }
 
@@ -3112,7 +3092,7 @@ edit_mark_current_word_cmd (WEdit * edit)
     }
     edit->mark1 = pos;
 
-    for (; pos < edit->last_byte; pos++)
+    for (; pos < edit->buffer.size; pos++)
     {
         int c1, c2;
 
@@ -3123,7 +3103,7 @@ edit_mark_current_word_cmd (WEdit * edit)
         if ((my_type_of (c1) & my_type_of (c2)) == 0)
             break;
     }
-    edit->mark2 = min (pos + 1, edit->last_byte);
+    edit->mark2 = min (pos + 1, edit->buffer.size);
 
     edit->force |= REDRAW_LINE_ABOVE | REDRAW_AFTER_CURSOR;
 }
@@ -3685,7 +3665,7 @@ edit_execute_cmd (WEdit * edit, unsigned long command, int char_for_insertion)
         edit_mark_cmd (edit, FALSE);
         break;
     case CK_MarkAll:
-        edit_set_markers (edit, 0, edit->last_byte, 0, 0);
+        edit_set_markers (edit, 0, edit->buffer.size, 0, 0);
         edit->force |= REDRAW_PAGE;
         break;
     case CK_Unmark:
@@ -3708,11 +3688,11 @@ edit_execute_cmd (WEdit * edit, unsigned long command, int char_for_insertion)
         break;
 
     case CK_Bookmark:
-        book_mark_clear (edit, edit->curs_line, BOOK_MARK_FOUND_COLOR);
-        if (book_mark_query_color (edit, edit->curs_line, BOOK_MARK_COLOR))
-            book_mark_clear (edit, edit->curs_line, BOOK_MARK_COLOR);
+        book_mark_clear (edit, edit->buffer.curs_line, BOOK_MARK_FOUND_COLOR);
+        if (book_mark_query_color (edit, edit->buffer.curs_line, BOOK_MARK_COLOR))
+            book_mark_clear (edit, edit->buffer.curs_line, BOOK_MARK_COLOR);
         else
-            book_mark_insert (edit, edit->curs_line, BOOK_MARK_COLOR);
+            book_mark_insert (edit, edit->buffer.curs_line, BOOK_MARK_COLOR);
         break;
     case CK_BookmarkFlush:
         book_mark_flush (edit, BOOK_MARK_COLOR);
@@ -3724,7 +3704,7 @@ edit_execute_cmd (WEdit * edit, unsigned long command, int char_for_insertion)
         {
             edit_book_mark_t *p;
 
-            p = book_mark_find (edit, edit->curs_line);
+            p = book_mark_find (edit, edit->buffer.curs_line);
             if (p->next != NULL)
             {
                 p = p->next;
@@ -3739,8 +3719,8 @@ edit_execute_cmd (WEdit * edit, unsigned long command, int char_for_insertion)
         {
             edit_book_mark_t *p;
 
-            p = book_mark_find (edit, edit->curs_line);
-            while (p->line == edit->curs_line)
+            p = book_mark_find (edit, edit->buffer.curs_line);
+            while (p->line == edit->buffer.curs_line)
                 if (p->prev != NULL)
                     p = p->prev;
             if (p->line >= 0)

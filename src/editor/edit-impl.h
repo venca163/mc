@@ -155,7 +155,6 @@ void user_menu (WEdit * edit, const char *menu_file, int selected_entry);
 void edit_init_menu (struct WMenuBar *menubar);
 void edit_save_mode_cmd (void);
 gboolean edit_translate_key (WEdit * edit, long x_key, int *cmd, int *ch);
-long edit_count_lines (const WEdit * edit, off_t current, off_t upto);
 off_t edit_move_forward (const WEdit * edit, off_t current, long lines, off_t upto);
 off_t edit_move_forward3 (const WEdit * edit, off_t current, long cols, off_t upto);
 off_t edit_move_backward (const WEdit * edit, off_t current, long lines);

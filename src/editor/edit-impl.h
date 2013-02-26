@@ -155,9 +155,7 @@ void user_menu (WEdit * edit, const char *menu_file, int selected_entry);
 void edit_init_menu (struct WMenuBar *menubar);
 void edit_save_mode_cmd (void);
 gboolean edit_translate_key (WEdit * edit, long x_key, int *cmd, int *ch);
-off_t edit_move_forward (const WEdit * edit, off_t current, long lines, off_t upto);
 off_t edit_move_forward3 (const WEdit * edit, off_t current, long cols, off_t upto);
-off_t edit_move_backward (const WEdit * edit, off_t current, long lines);
 void edit_scroll_screen_over_cursor (WEdit * edit);
 void edit_render_keypress (WEdit * edit);
 void edit_scroll_upward (WEdit * edit, long i);
@@ -226,8 +224,6 @@ off_t edit_insert_column_of_text_from_file (WEdit * edit, int file,
                                             off_t * start_pos, off_t * end_pos, long *col1,
                                             long *col2);
 
-char *edit_get_word_from_pos (const WEdit * edit, off_t start_pos, off_t * start, gsize * len,
-                              gsize * cut);
 off_t edit_insert_file (WEdit * edit, const vfs_path_t * filename_vpath);
 gboolean edit_load_back_cmd (WEdit * edit);
 gboolean edit_load_forward_cmd (WEdit * edit);

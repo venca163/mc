@@ -11,7 +11,6 @@
    This file is part of the Midnight Commander.
 
    The Midnight Commander is free software: you can redistribute it
-   and/or modify it under the terms of the GNU General Public License as
    published by the Free Software Foundation, either version 3 of the License,
    or (at your option) any later version.
 
@@ -507,7 +506,7 @@ find_parameters (char **start_dir, ssize_t * start_dir_len,
 
     /* file name */
     const char *file_name_label = N_("File name:");
-    const char *file_recurs_label = N_("&Find recursively");
+    const char *file_recurs_label = N_("&Find recursively ");
     const char *file_pattern_label = N_("&Using shell patterns");
     const char *file_only_directories_label = N_("Only &directories");
 #ifdef HAVE_CHARSET
@@ -515,6 +514,7 @@ find_parameters (char **start_dir, ssize_t * start_dir_len,
 #endif
     const char *file_case_label = N_("Cas&e sensitive");
     const char *file_skip_hidden_label = N_("S&kip hidden");
+//const char *file_only_directories_label = N_("Only &directories");
 
     /* file content */
     const char *content_content_label = N_("Content:");
@@ -578,6 +578,7 @@ find_parameters (char **start_dir, ssize_t * start_dir_len,
 #endif
     cw = max (cw, str_term_width1 (file_case_label) + 4);
     cw = max (cw, str_term_width1 (file_skip_hidden_label) + 4);
+ cw = max (cw, str_term_width1 (file_only_directories_label) + 4);
 
     cw = max (cw, str_term_width1 (content_content_label) + 4);
     cw = max (cw, str_term_width1 (content_use_label) + 4);
@@ -639,13 +640,10 @@ find_parameters (char **start_dir, ssize_t * start_dir_len,
     /* Start 1st column */
     add_widget (find_dlg, label_new (y1++, x1, file_name_label));
     in_name =
-        input_new (y1++, x1, input_get_default_colors (), cw, INPUT_LAST_TEXT, "name", INPUT_COMPLETE_FILENAMES | INPUT_COMPLETE_CD);
-    // cbox_position = FIND_Y - 5;
-
-    only_directories_cbox = check_new (y1--, 3, options.only_directories, file_only_directories_label);
-    add_widget (find_dlg, only_directories_cbox);
-                /*   */
+        input_new (y1++, x1, input_get_default_colors (), cw, INPUT_LAST_TEXT, "name",
+                   INPUT_COMPLETE_FILENAMES | INPUT_COMPLETE_CD);
     add_widget (find_dlg, in_name);
+/*   */
 
     /* Start 2nd column */
     content_label = label_new (y2++, x2, content_content_label);
@@ -678,6 +676,9 @@ find_parameters (char **start_dir, ssize_t * start_dir_len,
 
     skip_hidden_cbox = check_new (y1++, x1, options.skip_hidden, file_skip_hidden_label);
     add_widget (find_dlg, skip_hidden_cbox);
+
+only_directories_cbox = check_new (y1++, x1, options.only_directories, file_only_directories_label);
+    add_widget (find_dlg, only_directories_cbox);
 
     /* Continue 2nd column */
     content_regexp_cbox = check_new (y2++, x2, options.content_regexp, content_regexp_label);
